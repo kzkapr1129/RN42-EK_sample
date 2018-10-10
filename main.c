@@ -10,6 +10,7 @@
 
 #define _XTAL_FREQ 8000000
 // #define USE_INNER_PULLUP
+#define SYNC_MODE
 
 #pragma config FOSC = INTOSC, WDTE = OFF, LVP = OFF
 
@@ -97,6 +98,12 @@ void sendUSART(unsigned char c) {
     TXREG = c;
 }
 
+#ifdef SYNC_MODE
+unsigned char reciveUSART() {
+    while (PIR1bits.RCIF == 0);
+    return RCREG;
+}
+#else
 volatile unsigned char recvByte = 0;
 
 void interrupt isr(void) {
@@ -115,6 +122,7 @@ void interrupt isr(void) {
         }
     }
 }
+#endif
 
 void main(void) {    
     /* set a clock frequency */
@@ -149,18 +157,24 @@ void main(void) {
     INTCONbits.GIE  = 1; // allow global
 
     while (1) {
-        
-        unsigned char c = recvByte; 
+ 
+#ifdef SYNC_MODE
+        unsigned char c = reciveUSART();
+#else
+        unsigned char c = recvByte;
+        recvByte = 0;
+#endif
         if (c) {
-            recvByte = 0;
-
             ST7032_LCD_write(0x00, 0x01); // clear display
             __delay_ms(10);
             
-            ST7032_LCD_write(0x40, c); // display received character from USART
-        } else {
-            sendUSART('.'); // send an idle character
-            __delay_ms(3000);
+            ST7032_LCD_write(0x40, c); // received character from USART
+
+#ifdef SYNC_MODE
+            sendUSART('*');
+#else
+            sendUSART('-');
+#endif
         }
     }
 }
